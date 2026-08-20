@@ -227,34 +227,72 @@ function photoQuery(r){
 async function loadFoodPhoto(r, imgId){
   const img = document.getElementById(imgId);
   if(!img) return;
+
   const key = `${r.country}|${r.name}`;
+
+  // Use a cached photo only if it actually loads.
   if(photoCache[key]){
-    img.src = photoCache[key];
-    img.classList.add("loaded");
+    img.onload=()=>img.classList.add("loaded");
+    img.onerror=()=>{
+      delete photoCache[key];
+      localStorage.setItem("gkrh-photo-cache", JSON.stringify(photoCache));
+      img.removeAttribute("src");
+      tryFindFoodPhoto(r,img,key);
+    };
+    img.src=photoCache[key];
     return;
   }
+
+  tryFindFoodPhoto(r,img,key);
+}
+
+async function tryFindFoodPhoto(r,img,key){
   try{
-    const q = encodeURIComponent(photoQuery(r));
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json&origin=*`;
-    const data = await fetch(url).then(x=>x.json());
+    const q = encodeURIComponent(`${r.name} ${r.country} food`);
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=900&format=json&origin=*`;
+    const response = await fetch(url,{mode:"cors",cache:"no-store"});
+    if(!response.ok) throw new Error("Image search failed");
+    const data = await response.json();
     const pages = Object.values(data.query?.pages || {});
-    const good = pages.find(p => p.imageinfo?.[0]?.thumburl && /\.(jpg|jpeg|png|webp)$/i.test(p.imageinfo[0].thumburl));
-    if(good){
-      const photo = good.imageinfo[0].thumburl;
-      photoCache[key]=photo;
-      localStorage.setItem("gkrh-photo-cache", JSON.stringify(photoCache));
-      img.src=photo;
+
+    // Do not reject a valid Wikimedia thumbnail merely because its URL
+    // contains a query string or has an unusual extension.
+    const good = pages.find(p=>{
+      const ii=p.imageinfo?.[0];
+      return ii && (ii.thumburl || ii.url) &&
+        (!ii.mime || /^image\/(jpeg|png|webp|gif)$/i.test(ii.mime));
+    });
+
+    if(!good) throw new Error("No suitable photo found");
+
+    const ii=good.imageinfo[0];
+    const photo=ii.thumburl || ii.url;
+
+    img.onload=()=>{
       img.classList.add("loaded");
       img.alt=`${r.name} from ${r.country}`;
-    }
+    };
+    img.onerror=()=>{
+      // If the thumbnail fails, try the original Wikimedia image once.
+      if(ii.url && img.src !== ii.url){
+        img.src=ii.url;
+      }else{
+        img.style.display="none";
+      }
+    };
+
+    photoCache[key]=photo;
+    localStorage.setItem("gkrh-photo-cache",JSON.stringify(photoCache));
+    img.src=photo;
   }catch(e){
-    // Keep the dish card usable if an image service is unavailable.
+    // Keep the selected recipe usable even when the image service is unavailable.
+    img.setAttribute("aria-label",`Photo unavailable for ${r.name}`);
   }
 }
 function foodPhoto(r, id){
   return `<img id="${id}" class="food-photo" loading="lazy"
-    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='500'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle' font-size='42'%3E🍽️%3C/text%3E%3C/svg%3E"
-    alt="${r.name}" onerror="this.style.display='none'">`;
+    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='500'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' dominant-baseline='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' dominant-baseline='middle' font-size='20'%3ELoading photo…%3C/text%3E%3C/svg%3E"
+    alt="${r.name}">`;
 }
 function updateRecipeCount(count){
  const el=document.getElementById("recipeCount");
@@ -392,8 +430,9 @@ function filterPastryCatalog(){
  const box=document.getElementById('pastryCatalog'); if(!box||!window.pastryCatalog)return;
  const q=(document.getElementById('pastrySearch')?.value||'').toLowerCase(); const f=document.getElementById('pastryFamily')?.value||'All';
  const items=window.pastryCatalog.filter(r=>(f==='All'||r.category===f)&&(r.name+' '+r.category+' '+r.country).toLowerCase().includes(q));
- box.innerHTML=items.map(r=>`<div class="tile" style="overflow:hidden"><img id="pastry-photo-${recipes.indexOf(r)}" class="food-photo" style="height:145px;margin:-16px -16px 10px;width:calc(100% + 32px);border-radius:0" loading="lazy" alt="${r.name}"><div class="ico">${r.emoji}</div><b>${r.name}</b><span>${r.category}</span><button class="btn full" style="margin-top:9px" onclick="viewRecipe(${recipes.indexOf(r)})">Learn Recipe</button></div>`).join('') || `<div class="empty">No pastry products found.</div>`;
- items.slice(0,80).forEach(r=>loadFoodPhoto(r,`pastry-photo-${recipes.indexOf(r)}`));
+ const visible=items.slice(0,24);
+ box.innerHTML=visible.map(r=>`<div class="tile"><div class="ico">${r.emoji}</div><b>${r.name}</b><span>${r.category}</span><button class="btn full" style="margin-top:9px" onclick="viewRecipe(${recipes.indexOf(r)})">Learn Recipe</button></div>`).join('') || `<div class="empty">No pastry products found.</div>`;
+ if(items.length>24) box.insertAdjacentHTML('beforeend',`<div class="status-note" style="grid-column:1/-1;text-align:center">Showing the first 24 of ${items.length.toLocaleString()} pastry products. Search or choose a family to narrow the list.</div>`);
 }
 
 let learningProgress = JSON.parse(localStorage.getItem("gkrh-learning-progress") || "[]");
@@ -652,13 +691,13 @@ function showHealthGuide(key){
   <ul class="list">${g.principles.map(x=>`<li>${x}</li>`).join("")}</ul>
   <h4>Recipes from Global Kitchen</h4>
   <p>These are catalogue matches based on the general dietary pattern. They are not a personalised medical prescription.</p>
-  <div class="grid">${matches.map(r=>`<div class="tile" style="overflow:hidden"><img id="health-photo-${recipes.indexOf(r)}" class="food-photo" style="height:150px;margin:-16px -16px 10px;width:calc(100% + 32px);border-radius:0" loading="lazy" alt="${r.name}"><div class="ico">${r.emoji}</div><b>${r.name}</b><span>${r.country} • ${r.category}</span><button class="btn full" style="margin-top:9px" onclick="viewRecipe(${recipes.indexOf(r)})">View Recipe</button></div>`).join("")}</div>
+  <div class="grid">${matches.map(r=>`<div class="tile"><div class="ico">${r.emoji}</div><b>${r.name}</b><span>${r.country} • ${r.category}</span><button class="btn full" style="margin-top:9px" onclick="viewRecipe(${recipes.indexOf(r)})">View Recipe</button></div>`).join("")}</div>
   <div class="lesson">
    <b>Important safety note</b>
    <p>Health-condition filtering is educational and should not replace an individualized diet plan. Some conditions require exact nutrient, fluid, medication or allergy restrictions. Confirm specialized diets with a qualified clinician or dietitian.</p>
   </div>
  </div>`;
- matches.forEach(r=>loadFoodPhoto(r,`health-photo-${recipes.indexOf(r)}`));
+ // Health results do not download photos until a recipe is opened.
 }
 
 // Accessibility and modal safety: close on backdrop or Escape; prevent background scroll while open.
@@ -809,7 +848,7 @@ function removeShop(i){shopping.splice(i,1);save();openFeature("shopping")}
 populateCountries();
 populateCategories();
 updateExplorerUI();
-renderRecipes();
+// Initial recipe rendering is deferred to the optimized renderer below.
 </script>
 
 <script>
@@ -855,7 +894,8 @@ renderRecipes();
       status.textContent=`Showing ${list.length} recipes from ${scope}`;
     }
     if(!box) return;
-    box.innerHTML=list.length?list.map(r=>`<article class="recipe">${foodPhoto(r,`photo-${window.recipes.indexOf(r)}`)}<div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="actions"><button class="btn" onclick="viewRecipe(${window.recipes.indexOf(r)})">View Recipe</button><button class="btn alt" onclick="toggleFav(${window.recipes.indexOf(r)})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No matching recipes found. Try another country, category or search term.</div>';
+    const visible=list.slice(0,24);
+    box.innerHTML=visible.length?visible.map(r=>`<article class="recipe"><div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="actions"><button class="btn" onclick="viewRecipe(${window.recipes.indexOf(r)})">View Recipe</button><button class="btn alt" onclick="toggleFav(${window.recipes.indexOf(r)})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No matching recipes found. Try another country, category or search term.</div>';
     // Photos are loaded only after the user opens a recipe.
   };
   window.getFinalRecipeGuide=function(r){
@@ -949,8 +989,9 @@ renderRecipes();
     const count=document.getElementById('recipeCount'); if(count)count.textContent=`${list.length.toLocaleString()} recipe${list.length===1?'':'s'} found`;
     const status=document.getElementById('filterStatus'); if(status){const scope=activeCountry!=='All'?`${flag(activeCountry)} ${activeCountry}`:activeContinent!=='All'?activeContinent:'all cuisines';status.textContent=`Showing ${list.length.toLocaleString()} recipes from ${scope}`;}
     const box=document.getElementById('recipes'); if(!box)return;
-    box.innerHTML=list.length?list.map(r=>{const i=window.recipes.indexOf(r);return `<article class="recipe">${foodPhoto(r,`photo-${i}`)}<div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${flag(r.country)} ${r.country||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="status-note">${isComplete(r)?'✅ Complete recipe':'📚 Catalogue recipe'}${r.region==='Baking & Pastry'?' • 🥐 Baking & Pastry':''}</div><div class="actions"><button class="btn" onclick="viewRecipe(${i})">View Recipe</button><button class="btn alt" onclick="toggleFav(${i})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`}).join(''):'<div class="empty">No matching recipes found. Try another country, category, search term or recipe-detail filter.</div>';
-    // Photos are loaded only after the user opens a recipe.
+    const visible=list.slice(0,24);
+    box.innerHTML=visible.length?visible.map(r=>{const i=window.recipes.indexOf(r);return `<article class="recipe"><div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${flag(r.country)} ${r.country||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="status-note">${isComplete(r)?'✅ Complete recipe':'📚 Catalogue recipe'}${r.region==='Baking & Pastry'?' • 🥐 Baking & Pastry':''}</div><div class="actions"><button class="btn" onclick="viewRecipe(${i})">View Recipe</button><button class="btn alt" onclick="toggleFav(${i})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`}).join(''):'<div class="empty">No matching recipes found. Try another country, category, search term or recipe-detail filter.</div>';
+    if(list.length>24) box.insertAdjacentHTML('beforeend',`<div class="status-note" style="grid-column:1/-1;text-align:center">Showing the first 24 of ${list.length.toLocaleString()} matches. Use search, country or category filters to narrow the list.</div>`);
   };
   window.clearAllFilters=function(){const q=document.getElementById('search');if(q)q.value='';const c=document.getElementById('categoryFilter');if(c)c.value='All';const qf=document.getElementById('qualityFilter');if(qf)qf.value='All';selectedCountry='All';selectedContinent='All';window.selectedCountry='All';window.selectedContinent='All';populateCountries();updateExplorerUI();renderRecipes();};
   window.openLibraryCoverage=function(){

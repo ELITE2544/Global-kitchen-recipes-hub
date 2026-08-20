@@ -306,7 +306,7 @@ function renderRecipes(){
  <div class="meta">${r.country} • ${r.region} • ${r.category} • ⏱ ${r.time} min</div>
  <div class="actions"><button class="btn" onclick="viewRecipe(${recipes.indexOf(r)})">View Recipe</button>
  <button class="btn alt" onclick="toggleFav(${recipes.indexOf(r)})">${favourites.includes(r.name)?"♥":"♡"}</button></div></article>`).join(""):`<div class="empty">No matching recipes found. Try another ingredient or dish.</div>`;
- list.slice(0,24).forEach(r=>loadFoodPhoto(r,`photo-${recipes.indexOf(r)}`));
+ // Photos are loaded only after the user opens a recipe.
 }
 function save(){localStorage.setItem("gkrh-fav",JSON.stringify(favourites));localStorage.setItem("gkrh-shop",JSON.stringify(shopping));}
 function show(html){const m=document.getElementById("modal");m.style.display="flex";m.style.pointerEvents="auto";m.style.visibility="visible";m.setAttribute("aria-hidden","false");document.getElementById("modalContent").innerHTML=html;m.classList.add("show");document.body.style.overflow="hidden";document.querySelector("#modal .close")?.focus()}
@@ -856,7 +856,7 @@ renderRecipes();
     }
     if(!box) return;
     box.innerHTML=list.length?list.map(r=>`<article class="recipe">${foodPhoto(r,`photo-${window.recipes.indexOf(r)}`)}<div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="actions"><button class="btn" onclick="viewRecipe(${window.recipes.indexOf(r)})">View Recipe</button><button class="btn alt" onclick="toggleFav(${window.recipes.indexOf(r)})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No matching recipes found. Try another country, category or search term.</div>';
-    list.slice(0,24).forEach(r=>loadFoodPhoto(r,`photo-${window.recipes.indexOf(r)}`));
+    // Photos are loaded only after the user opens a recipe.
   };
   window.getFinalRecipeGuide=function(r){
     const n=(r.name||'').toLowerCase(), cat=(r.category||'').toLowerCase();
@@ -891,7 +891,9 @@ renderRecipes();
   };
   window.viewRecipe=function(i){
     const r=window.recipes[i];
-    show(`<h2>${r.emoji||'🍽️'} ${r.name}</h2><p class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} minutes</p><h3>Ingredients</h3><ul class="list" id="ings">${(r.ingredients||[]).map(x=>`<li>${x}</li>`).join('')}</ul><div class="field"><label>Number of people / servings</label><input id="people" type="number" min="1" value="4"></div><button class="btn full" onclick="scaleRecipe(${i})">Adjust quantities</button><h3>Method</h3><ol class="list">${(r.steps||[]).map(x=>`<li>${x}</li>`).join('')}</ol><button class="btn full" style="margin-top:8px" onclick="startFinalLesson(${i})">👨‍🍳 Start Comprehensive Lesson</button><button class="btn alt full" style="margin-top:8px" onclick="addIngredients(${i})">🛒 Add Ingredients to Shopping List</button>`);
+    show(`<h2>${r.emoji||'🍽️'} ${r.name}</h2>${foodPhoto(r,`selected-photo-${i}`)}<p class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} minutes</p><h3>Ingredients</h3><ul class="list" id="ings">${(r.ingredients||[]).map(x=>`<li>${x}</li>`).join('')}</ul><div class="field"><label>Number of people / servings</label><input id="people" type="number" min="1" value="4"></div><button class="btn full" onclick="scaleRecipe(${i})">Adjust quantities</button><h3>Method</h3><ol class="list">${(r.steps||[]).map(x=>`<li>${x}</li>`).join('')}</ol><button class="btn full" style="margin-top:8px" onclick="startFinalLesson(${i})">👨‍🍳 Start Comprehensive Lesson</button><button class="btn alt full" style="margin-top:8px" onclick="addIngredients(${i})">🛒 Add Ingredients to Shopping List</button>`);
+    // Performance: request exactly one external photo, for the dish the user selected.
+    loadFoodPhoto(r,`selected-photo-${i}`);
   };
   document.addEventListener('keydown',e=>{if(e.key==='Escape')window.closeModal&&window.closeModal();});
   window.updateLibraryStatus=function(){
@@ -948,7 +950,7 @@ renderRecipes();
     const status=document.getElementById('filterStatus'); if(status){const scope=activeCountry!=='All'?`${flag(activeCountry)} ${activeCountry}`:activeContinent!=='All'?activeContinent:'all cuisines';status.textContent=`Showing ${list.length.toLocaleString()} recipes from ${scope}`;}
     const box=document.getElementById('recipes'); if(!box)return;
     box.innerHTML=list.length?list.map(r=>{const i=window.recipes.indexOf(r);return `<article class="recipe">${foodPhoto(r,`photo-${i}`)}<div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${flag(r.country)} ${r.country||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="status-note">${isComplete(r)?'✅ Complete recipe':'📚 Catalogue recipe'}${r.region==='Baking & Pastry'?' • 🥐 Baking & Pastry':''}</div><div class="actions"><button class="btn" onclick="viewRecipe(${i})">View Recipe</button><button class="btn alt" onclick="toggleFav(${i})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`}).join(''):'<div class="empty">No matching recipes found. Try another country, category, search term or recipe-detail filter.</div>';
-    list.slice(0,24).forEach(r=>loadFoodPhoto(r,`photo-${window.recipes.indexOf(r)}`));
+    // Photos are loaded only after the user opens a recipe.
   };
   window.clearAllFilters=function(){const q=document.getElementById('search');if(q)q.value='';const c=document.getElementById('categoryFilter');if(c)c.value='All';const qf=document.getElementById('qualityFilter');if(qf)qf.value='All';selectedCountry='All';selectedContinent='All';window.selectedCountry='All';window.selectedContinent='All';populateCountries();updateExplorerUI();renderRecipes();};
   window.openLibraryCoverage=function(){

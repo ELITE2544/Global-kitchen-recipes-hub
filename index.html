@@ -247,51 +247,49 @@ async function loadFoodPhoto(r, imgId){
 }
 
 async function tryFindFoodPhoto(r,img,key){
+  // Photos are deliberately loaded ONLY after a recipe is opened.
+  // A timeout prevents a slow image service from making the app feel frozen.
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(),6500);
   try{
     const q = encodeURIComponent(`${r.name} ${r.country} food`);
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=900&format=json&origin=*`;
-    const response = await fetch(url,{mode:"cors",cache:"no-store"});
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|mime&iiurlwidth=700&format=json&origin=*`;
+    const response = await fetch(url,{mode:"cors",cache:"default",signal:controller.signal});
     if(!response.ok) throw new Error("Image search failed");
     const data = await response.json();
     const pages = Object.values(data.query?.pages || {});
-
-    // Do not reject a valid Wikimedia thumbnail merely because its URL
-    // contains a query string or has an unusual extension.
     const good = pages.find(p=>{
       const ii=p.imageinfo?.[0];
-      return ii && (ii.thumburl || ii.url) &&
-        (!ii.mime || /^image\/(jpeg|png|webp|gif)$/i.test(ii.mime));
+      return ii && (ii.thumburl || ii.url) && (!ii.mime || /^image\/(jpeg|png|webp|gif)$/i.test(ii.mime));
     });
-
     if(!good) throw new Error("No suitable photo found");
 
     const ii=good.imageinfo[0];
     const photo=ii.thumburl || ii.url;
-
     img.onload=()=>{
       img.classList.add("loaded");
       img.alt=`${r.name} from ${r.country}`;
     };
     img.onerror=()=>{
-      // If the thumbnail fails, try the original Wikimedia image once.
-      if(ii.url && img.src !== ii.url){
-        img.src=ii.url;
-      }else{
-        img.style.display="none";
-      }
+      if(ii.url && img.src !== ii.url){ img.src=ii.url; }
+      else { setPhotoFallback(img,r); }
     };
-
     photoCache[key]=photo;
-    localStorage.setItem("gkrh-photo-cache",JSON.stringify(photoCache));
+    try{localStorage.setItem("gkrh-photo-cache",JSON.stringify(photoCache));}catch(e){}
     img.src=photo;
   }catch(e){
-    // Keep the selected recipe usable even when the image service is unavailable.
-    img.setAttribute("aria-label",`Photo unavailable for ${r.name}`);
+    setPhotoFallback(img,r);
+  }finally{
+    clearTimeout(timer);
   }
 }
+function setPhotoFallback(img,r){
+  img.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' font-size='18'%3EPhoto unavailable offline%3C/text%3E%3C/svg%3E";
+  img.alt=`Photo unavailable for ${r.name}`;
+}
 function foodPhoto(r, id){
-  return `<img id="${id}" class="food-photo" loading="lazy"
-    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='500'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' dominant-baseline='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' dominant-baseline='middle' font-size='20'%3ELoading photo…%3C/text%3E%3C/svg%3E"
+  return `<img id="${id}" class="food-photo" loading="lazy" decoding="async"
+    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' dominant-baseline='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' dominant-baseline='middle' font-size='20'%3ELoading photo…%3C/text%3E%3C/svg%3E"
     alt="${r.name}">`;
 }
 function updateRecipeCount(count){

@@ -70,6 +70,7 @@ main{padding:18px}.hero{background:white;border-radius:22px;padding:20px;box-sha
 @media(max-width:480px){.quick-actions{grid-template-columns:repeat(2,1fr)}}
 </style>
 
+<style>/* Photo-free build: no external image requests */</style>
 </head>
 <body>
 <div class="app">
@@ -134,7 +135,7 @@ main{padding:18px}.hero{background:white;border-radius:22px;padding:20px;box-sha
 </div>
 
 <div style="padding:10px 18px 95px;text-align:center;color:#66716b;font-size:11px">
-  Global Kitchen Recipes Hub • Final App Build
+  Global Kitchen Recipes Hub • Stable Build • No External Photos
 </div>
 
 </main>
@@ -219,79 +220,7 @@ function selectCountry(country){
 }
 
 
-const photoCache = JSON.parse(localStorage.getItem("gkrh-photo-cache") || "{}");
 
-function photoQuery(r){
-  return `${r.name} ${r.country} food dish`;
-}
-async function loadFoodPhoto(r, imgId){
-  const img = document.getElementById(imgId);
-  if(!img) return;
-
-  const key = `${r.country}|${r.name}`;
-
-  // Use a cached photo only if it actually loads.
-  if(photoCache[key]){
-    img.onload=()=>img.classList.add("loaded");
-    img.onerror=()=>{
-      delete photoCache[key];
-      localStorage.setItem("gkrh-photo-cache", JSON.stringify(photoCache));
-      img.removeAttribute("src");
-      tryFindFoodPhoto(r,img,key);
-    };
-    img.src=photoCache[key];
-    return;
-  }
-
-  tryFindFoodPhoto(r,img,key);
-}
-
-async function tryFindFoodPhoto(r,img,key){
-  // Photos are deliberately loaded ONLY after a recipe is opened.
-  // A timeout prevents a slow image service from making the app feel frozen.
-  const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(),6500);
-  try{
-    const q = encodeURIComponent(`${r.name} ${r.country} food`);
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|mime&iiurlwidth=700&format=json&origin=*`;
-    const response = await fetch(url,{mode:"cors",cache:"default",signal:controller.signal});
-    if(!response.ok) throw new Error("Image search failed");
-    const data = await response.json();
-    const pages = Object.values(data.query?.pages || {});
-    const good = pages.find(p=>{
-      const ii=p.imageinfo?.[0];
-      return ii && (ii.thumburl || ii.url) && (!ii.mime || /^image\/(jpeg|png|webp|gif)$/i.test(ii.mime));
-    });
-    if(!good) throw new Error("No suitable photo found");
-
-    const ii=good.imageinfo[0];
-    const photo=ii.thumburl || ii.url;
-    img.onload=()=>{
-      img.classList.add("loaded");
-      img.alt=`${r.name} from ${r.country}`;
-    };
-    img.onerror=()=>{
-      if(ii.url && img.src !== ii.url){ img.src=ii.url; }
-      else { setPhotoFallback(img,r); }
-    };
-    photoCache[key]=photo;
-    try{localStorage.setItem("gkrh-photo-cache",JSON.stringify(photoCache));}catch(e){}
-    img.src=photo;
-  }catch(e){
-    setPhotoFallback(img,r);
-  }finally{
-    clearTimeout(timer);
-  }
-}
-function setPhotoFallback(img,r){
-  img.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' font-size='18'%3EPhoto unavailable offline%3C/text%3E%3C/svg%3E";
-  img.alt=`Photo unavailable for ${r.name}`;
-}
-function foodPhoto(r, id){
-  return `<img id="${id}" class="food-photo" loading="lazy" decoding="async"
-    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='400'%3E%3Crect width='100%25' height='100%25' fill='%23eef2ef'/%3E%3Ctext x='50%25' y='45%25' text-anchor='middle' dominant-baseline='middle' font-size='42'%3E🍽️%3C/text%3E%3Ctext x='50%25' y='62%25' text-anchor='middle' dominant-baseline='middle' font-size='20'%3ELoading photo…%3C/text%3E%3C/svg%3E"
-    alt="${r.name}">`;
-}
 function updateRecipeCount(count){
  const el=document.getElementById("recipeCount");
  if(el) el.textContent=`${count} recipe${count===1?"":"s"} found`;
@@ -399,7 +328,7 @@ function viewRecipe(i){
  const ingredients=d?d.ingredients.map(([n,q])=>`<li><b>${n}</b>: <span data-base="${q}">${q}</span></li>`).join(''):r.ingredients.map(x=>`<li>${x}</li>`).join('');
  const method=d?d.method:r.steps;
  const extra=d?`<div class="lesson"><p><b>Yield:</b> ${d.servings} servings</p><p><b>Equipment:</b> ${d.equipment.join(', ')}</p><p><b>Allergens:</b> ${d.allergens.join(', ')}</p></div><h3>Chef tips</h3><ul class="list">${d.tips.map(x=>`<li>${x}</li>`).join('')}</ul>`:'';
- show(`${foodPhoto(r,`modal-photo-${i}`)}<h2>${r.emoji} ${r.name}</h2><p class="meta">${r.country} • ${r.region} • ${r.category} • ⏱ ${d?d.time:r.time} minutes</p>${profile}${extra}
+ show(`<div style="height:110px;display:flex;align-items:center;justify-content:center;font-size:52px;background:#eef2ef;border-radius:15px;margin-bottom:12px">${r.emoji||'🍽️'}</div><h2>${r.emoji} ${r.name}</h2><p class="meta">${r.country} • ${r.region} • ${r.category} • ⏱ ${d?d.time:r.time} minutes</p>${profile}${extra}
  <h3>Ingredients</h3><ul class="list" id="ings">${ingredients}</ul>
  <div class="field"><label>Number of people / servings</label><input id="people" type="number" min="1" value="${d?d.servings:4}"></div>
  <button class="btn full" onclick="scaleRecipe(${i})">Adjust quantities</button>
@@ -408,7 +337,6 @@ function viewRecipe(i){
  <button class="btn alt full" onclick="startSpecificLesson(${i})">👨‍🍳 Start Comprehensive Lesson</button>
  <button class="btn alt full" onclick="addIngredients(${i})">🛒 Add ingredients to Shopping List</button>
  <div class="recipe-tools"><button class="btn alt" onclick="printCurrentRecipe()">🖨️ Print</button><button class="btn alt" onclick="shareCurrentRecipe(${JSON.stringify(r.name)})">📤 Share</button></div>`);
- loadFoodPhoto(r,`modal-photo-${i}`);
 }
 function startSpecificLesson(i){
  closeModal();
@@ -855,200 +783,10 @@ function removeShop(i){shopping.splice(i,1);save();openFeature("shopping")}
 populateCountries();
 populateCategories();
 updateExplorerUI();
-// Initial recipe rendering is deferred to the optimized renderer below.
+// Initial render.
+renderRecipes();
 </script>
 
 <script>
-(function(){
-  function hide(el){ if(!el)return; el.classList.remove('show','open','active','visible'); el.setAttribute('aria-hidden','true'); if(el.id==='modal'){el.style.display='none';el.style.pointerEvents='none';el.style.visibility='hidden';} }
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest('.close,[data-close],[data-dismiss],.close-btn,.modal-close,.popup-close');
-    if(btn){ e.preventDefault(); e.stopPropagation(); const m=btn.closest('.modal,.popup,.overlay,.dialog,.modal-overlay')||document.getElementById('modal'); hide(m); return; }
-    if(e.target===document.getElementById('modal')) hide(document.getElementById('modal'));
-  },true);
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape') hide(document.getElementById('modal')); },true);
-})();
-
-// FINAL APP ENHANCEMENTS v5
-(function(){
-  const originalRender=window.renderRecipes;
-  window.populateCategoryFilter=function(){
-    const el=document.getElementById('categoryFilter'); if(!el) return;
-    const cats=[...new Set((window.recipes||[]).map(r=>r.category).filter(Boolean))].sort();
-    const current=el.value;
-    el.innerHTML='<option value="All">All categories</option>'+cats.map(c=>`<option value="${String(c).replace(/"/g,'&quot;')}">${c}</option>`).join('');
-    if(cats.includes(current)) el.value=current;
-  };
-  window.clearAllFilters=function(){ const q=document.getElementById('search'); if(q) q.value=''; const c=document.getElementById('categoryFilter'); if(c) c.value='All'; selectedCountry='All'; selectedContinent='All'; window.selectedCountry='All'; window.selectedContinent='All'; populateCountries(); updateExplorerUI(); if(typeof window.renderRecipes==='function') window.renderRecipes(); };
-  window.renderRecipes=function(){
-    const q=(document.getElementById('search')?.value||'').toLowerCase().trim();
-    const cat=document.getElementById('categoryFilter')?.value||'All';
-    const activeCountry=window.selectedCountry || selectedCountry || 'All';
-    const activeContinent=window.selectedContinent || selectedContinent || 'All';
-    const continentOf = r => Object.keys(cuisineCountries).find(c=>(cuisineCountries[c]||[]).includes(r.country)) || 'International';
-    const list=window.recipes.filter(r=>{
-      const hay=(r.name+' '+r.country+' '+r.region+' '+r.category+' '+(r.ingredients||[]).join(' ')).toLowerCase();
-      const searchOK=!q || hay.includes(q);
-      const countryOK=activeCountry==='All' || r.country===activeCountry;
-      const continentOK=activeContinent==='All' || continentOf(r)===activeContinent;
-      const categoryOK=cat==='All' || r.category===cat;
-      return searchOK && countryOK && continentOK && categoryOK;
-    });
-    const box=document.getElementById('recipes');
-    const status=document.getElementById('filterStatus');
-    if(status){
-      const scope=activeCountry!=='All'?activeCountry:(activeContinent!=='All'?activeContinent:'all cuisines');
-      status.textContent=`Showing ${list.length} recipes from ${scope}`;
-    }
-    if(!box) return;
-    const visible=list.slice(0,24);
-    box.innerHTML=visible.length?visible.map(r=>`<article class="recipe"><div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="actions"><button class="btn" onclick="viewRecipe(${window.recipes.indexOf(r)})">View Recipe</button><button class="btn alt" onclick="toggleFav(${window.recipes.indexOf(r)})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No matching recipes found. Try another country, category or search term.</div>';
-    // Photos are loaded only after the user opens a recipe.
-  };
-  window.getFinalRecipeGuide=function(r){
-    const n=(r.name||'').toLowerCase(), cat=(r.category||'').toLowerCase();
-    let type='savory';
-    if(/cake|cupcake|muffin|scone|cookie|biscuit|brownie|cheesecake|tart|pie|danish|croissant|eclair|choux|doughnut|donut|bread|bun|roll|pastry|pudding|meringue|macaron|baklava|strudel|waffle|pancake|crepe|dessert/.test(n)||cat.includes('pastry')||cat.includes('bak')) type='baking';
-    const baking={
-      equipment:['Digital scale','Mixing bowls','Measuring spoons','Baking tray/tin','Oven thermometer','Cooling rack','Whisk or mixer','Parchment paper'],
-      principles:['Weigh ingredients for repeatable results.','Preheat the oven fully before baking.','Use room-temperature ingredients when the recipe calls for them.','Avoid opening the oven repeatedly during the first part of baking.'],
-      steps:['Prepare and line the correct tin/tray; preheat the oven.','Measure every ingredient accurately and prepare fillings/toppings.','Mix using the correct method for the product: cream, whisk, rub-in, knead, laminate or choux.','Shape or fill evenly; allow proofing/chilling where required.','Bake until the product reaches the expected colour, structure and internal doneness.','Cool before filling, icing or slicing unless the product specifically requires warm serving.','Store in an airtight container or refrigerate fillings as required.'],
-      troubleshooting:['Dense cake: overmixing, expired leavener or incorrect measurement.','Flat bread: weak yeast, insufficient proofing or liquid temperature problems.','Soggy pastry: warm fat, wet filling or insufficient baking.','Burnt outside/raw centre: oven too hot, tin too small or baking time/temperature mismatch.']
-    };
-    const savory={
-      equipment:['Chef knife','Cutting board','Saucepan or frying pan','Measuring spoons','Cooking thermometer where appropriate'],
-      principles:['Prepare ingredients before starting.','Keep raw animal foods separate from ready-to-eat foods.','Cook to safe doneness and avoid tasting food with the cooking utensil.','Adjust seasoning gradually and taste only when safe.'],
-      steps:['Wash, trim and prepare ingredients.','Heat the pan or pot appropriately before adding food.','Cook aromatics, then add the main ingredients in the correct order.','Maintain the correct heat and add liquid when the method requires it.','Cook until tender and safely done, then taste and adjust seasoning.','Rest where appropriate and serve at a safe temperature.','Cool leftovers promptly and refrigerate in clean covered containers.'],
-      troubleshooting:['Tough meat: insufficient cooking time or wrong cut/method.','Watery sauce: too much liquid or insufficient reduction.','Burning: heat too high or pan left unattended.','Bland food: seasoning added too late or insufficient aromatics/acid.']
-    };
-    const g=type==='baking'?baking:savory;
-    return {type,equipment:g.equipment,principles:g.principles,steps:g.steps,troubleshooting:g.troubleshooting,temperature:type==='baking'?'Typical starting range: 160–190°C; confirm the specific product method before baking.':'Use the heat level appropriate to the method; verify safe internal temperature for meat, poultry and other applicable foods.',yield:type==='baking'?'Record tin size and number of pieces produced for consistent batches.':'Record servings and portion size for consistent meal planning.'};
-  };
-  window.startFinalLesson=function(i){
-    const r=window.recipes[i], g=window.getFinalRecipeGuide(r);
-    const html=`<h2>👨‍🍳 Complete Lesson: ${r.emoji||'🍽️'} ${r.name}</h2><p class="meta">${r.country||''} • ${r.category||''} • ${r.time||30} minutes</p>
-    <div class="lesson"><b>1. What you need</b><ul class="list">${g.equipment.map(x=>`<li>${x}</li>`).join('')}</ul></div>
-    <div class="lesson"><b>2. Ingredients / quantities</b><ul class="list">${(r.ingredients||[]).map(x=>`<li>${x}</li>`).join('')}</ul><p><b>Yield:</b> ${g.yield}</p></div>
-    <div class="lesson"><b>3. Technique</b><ul class="list">${g.principles.map(x=>`<li>${x}</li>`).join('')}</ul></div>
-    <div class="lesson"><b>4. Step-by-step</b><ol class="list">${g.steps.map(x=>`<li>${x}</li>`).join('')}</ol><p><b>Temperature:</b> ${g.temperature}</p></div>
-    <div class="lesson"><b>5. Troubleshooting</b><ul class="list">${g.troubleshooting.map(x=>`<li>${x}</li>`).join('')}</ul></div>
-    <div class="lesson"><b>6. Practice</b><p>Make one batch, record the result, identify one improvement, then repeat. For baking, record dough/batter consistency, oven temperature, baking time and final yield.</p></div>
-    <button class="btn full" onclick="closeModal()">Finish Lesson</button>`;
-    show(html);
-  };
-  window.viewRecipe=function(i){
-    const r=window.recipes[i];
-    show(`<h2>${r.emoji||'🍽️'} ${r.name}</h2>${foodPhoto(r,`selected-photo-${i}`)}<p class="meta">${r.country||''} • ${r.region||''} • ${r.category||''} • ⏱ ${r.time||30} minutes</p><h3>Ingredients</h3><ul class="list" id="ings">${(r.ingredients||[]).map(x=>`<li>${x}</li>`).join('')}</ul><div class="field"><label>Number of people / servings</label><input id="people" type="number" min="1" value="4"></div><button class="btn full" onclick="scaleRecipe(${i})">Adjust quantities</button><h3>Method</h3><ol class="list">${(r.steps||[]).map(x=>`<li>${x}</li>`).join('')}</ol><button class="btn full" style="margin-top:8px" onclick="startFinalLesson(${i})">👨‍🍳 Start Comprehensive Lesson</button><button class="btn alt full" style="margin-top:8px" onclick="addIngredients(${i})">🛒 Add Ingredients to Shopping List</button>`);
-    // Performance: request exactly one external photo, for the dish the user selected.
-    loadFoodPhoto(r,`selected-photo-${i}`);
-  };
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')window.closeModal&&window.closeModal();});
-  window.updateLibraryStatus=function(){
-    const el=document.getElementById("libraryStatus"); if(!el) return;
-    const all=window.recipes||[];
-    const countryCounts={};
-    all.forEach(r=>{if(r.country && r.country!=="International") countryCounts[r.country]=(countryCounts[r.country]||0)+1;});
-    const countries=Object.keys(countryCounts);
-    const complete=countries.filter(c=>countryCounts[c]>=20).length;
-    const pastry=all.filter(r=>r.region==="Baking & Pastry" || /pastry|bak/i.test(r.category||"")).length;
-    el.innerHTML=`<b>Recipe library:</b> ${all.length.toLocaleString()} recipes • <b>${complete}</b> countries with 20+ recipes • <b>${pastry}</b> baking/pastry entries`;
-  };
-  const oldRender=window.renderRecipes;
-  window.renderRecipes=function(){ oldRender(); window.updateLibraryStatus(); };
-  document.addEventListener('DOMContentLoaded',()=>{window.populateCategoryFilter(); window.updateLibraryStatus(); if(window.renderRecipes) window.renderRecipes();});
-})();
+// Stable build: no duplicate renderers or external photo services.
 </script>
-
-<div style="text-align:center;padding:18px 0 85px;color:#68736d;font-size:12px">Global Kitchen Recipes Hub • V14 recipe library & quality upgrade</div>
-<script>
-/* FINAL RELEASE POLISH — V15 */
-(function(){
-  const ISO={
-    "Afghanistan":"AF","Albania":"AL","Algeria":"DZ","Andorra":"AD","Angola":"AO","Antigua and Barbuda":"AG","Argentina":"AR","Armenia":"AM","Australia":"AU","Austria":"AT","Azerbaijan":"AZ","Bahamas":"BS","Bahrain":"BH","Bangladesh":"BD","Barbados":"BB","Belarus":"BY","Belgium":"BE","Belize":"BZ","Benin":"BJ","Bhutan":"BT","Bolivia":"BO","Bosnia and Herzegovina":"BA","Botswana":"BW","Brazil":"BR","Brunei":"BN","Bulgaria":"BG","Burkina Faso":"BF","Burundi":"BI","Cabo Verde":"CV","Cambodia":"KH","Cameroon":"CM","Canada":"CA","Central African Republic":"CF","Chad":"TD","Chile":"CL","China":"CN","Colombia":"CO","Comoros":"KM","Congo":"CG","Costa Rica":"CR","Croatia":"HR","Cuba":"CU","Cyprus":"CY","Czechia":"CZ","Democratic Republic of the Congo":"CD","Denmark":"DK","Djibouti":"DJ","Dominica":"DM","Dominican Republic":"DO","Ecuador":"EC","Egypt":"EG","El Salvador":"SV","Equatorial Guinea":"GQ","Eritrea":"ER","Estonia":"EE","Eswatini":"SZ","Ethiopia":"ET","Fiji":"FJ","Finland":"FI","France":"FR","Gabon":"GA","Gambia":"GM","Georgia":"GE","Germany":"DE","Ghana":"GH","Greece":"GR","Grenada":"GD","Guatemala":"GT","Guinea":"GN","Guinea-Bissau":"GW","Guyana":"GY","Haiti":"HT","Honduras":"HN","Hungary":"HU","Iceland":"IS","India":"IN","Indonesia":"ID","Iran":"IR","Iraq":"IQ","Ireland":"IE","Israel":"IL","Italy":"IT","Ivory Coast":"CI","Jamaica":"JM","Japan":"JP","Jordan":"JO","Kazakhstan":"KZ","Kenya":"KE","Kiribati":"KI","Kuwait":"KW","Kyrgyzstan":"KG","Laos":"LA","Latvia":"LV","Lebanon":"LB","Lesotho":"LS","Liberia":"LR","Libya":"LY","Liechtenstein":"LI","Lithuania":"LT","Luxembourg":"LU","Madagascar":"MG","Malawi":"MW","Malaysia":"MY","Maldives":"MV","Mali":"ML","Malta":"MT","Marshall Islands":"MH","Mauritania":"MR","Mauritius":"MU","Mexico":"MX","Micronesia":"FM","Moldova":"MD","Monaco":"MC","Mongolia":"MN","Montenegro":"ME","Morocco":"MA","Mozambique":"MZ","Myanmar":"MM","Namibia":"NA","Nauru":"NR","Nepal":"NP","Netherlands":"NL","New Zealand":"NZ","Nicaragua":"NI","Niger":"NE","Nigeria":"NG","North Korea":"KP","North Macedonia":"MK","Norway":"NO","Oman":"OM","Pakistan":"PK","Palau":"PW","Palestine":"PS","Panama":"PA","Papua New Guinea":"PG","Paraguay":"PY","Peru":"PE","Philippines":"PH","Poland":"PL","Portugal":"PT","Qatar":"QA","Romania":"RO","Russia":"RU","Rwanda":"RW","Saint Kitts and Nevis":"KN","Saint Lucia":"LC","Saint Vincent and the Grenadines":"VC","Samoa":"WS","San Marino":"SM","Sao Tome and Principe":"ST","Saudi Arabia":"SA","Senegal":"SN","Serbia":"RS","Seychelles":"SC","Sierra Leone":"SL","Singapore":"SG","Slovakia":"SK","Slovenia":"SI","Solomon Islands":"SB","Somalia":"SO","South Africa":"ZA","South Korea":"KR","South Sudan":"SS","Spain":"ES","Sri Lanka":"LK","Sudan":"SD","Suriname":"SR","Sweden":"SE","Switzerland":"CH","Syria":"SY","Tajikistan":"TJ","Tanzania":"TZ","Thailand":"TH","Timor-Leste":"TL","Togo":"TG","Tonga":"TO","Trinidad and Tobago":"TT","Tunisia":"TN","Turkey":"TR","Turkmenistan":"TM","Tuvalu":"TV","Uganda":"UG","Ukraine":"UA","United Arab Emirates":"AE","United Kingdom":"GB","United States":"US","Uruguay":"UY","Uzbekistan":"UZ","Vanuatu":"VU","Vatican City":"VA","Venezuela":"VE","Vietnam":"VN","Yemen":"YE","Zambia":"ZM","Zimbabwe":"ZW","Antarctica":"AQ"
-  };
-  function flag(name){const c=ISO[name]; if(!c)return '🌐'; return [...c].map(x=>String.fromCodePoint(127397+x.charCodeAt(0))).join('');}
-  window.countryFlag=flag;
-  window.populateCountries=function(){
-    const select=document.getElementById('countryFilter'); if(!select)return;
-    const countries=selectedContinent==='All'?Object.values(cuisineCountries).flat():(cuisineCountries[selectedContinent]||[]);
-    const unique=[...new Set(countries)].sort((a,b)=>a.localeCompare(b));
-    const current=selectedCountry;
-    select.innerHTML='<option value="All">🌎 All countries</option>'+unique.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${flag(c)} ${c}</option>`).join('');
-    select.value=unique.includes(current)?current:'All';
-  };
-  window.updateExplorerUI=function(){
-    document.querySelectorAll('.continent').forEach(b=>b.classList.toggle('active',b.dataset.continent===selectedContinent));
-    const status=document.getElementById('filterStatus');
-    if(status){status.textContent=selectedCountry!=='All'?`Showing ${flag(selectedCountry)} ${selectedCountry} recipes`:selectedContinent==='All'?'Showing recipes from all cuisines':`Showing ${selectedContinent} recipes`;}
-  };
-  window.renderRecipes=function(){
-    const q=(document.getElementById('search')?.value||'').toLowerCase().trim();
-    const cat=document.getElementById('categoryFilter')?.value||'All';
-    const quality=document.getElementById('qualityFilter')?.value||'All';
-    const activeCountry=window.selectedCountry||selectedCountry||'All';
-    const activeContinent=window.selectedContinent||selectedContinent||'All';
-    const continentOf=r=>Object.keys(cuisineCountries).find(c=>(cuisineCountries[c]||[]).includes(r.country))||'International';
-    const isComplete=r=>{const d=getDetailedRecipe?.(r); return !!d || ((r.ingredients||[]).length>=5 && (r.steps||[]).length>=4 && !/main protein|traditional technique|general formula|prepare and measure the ingredients/i.test((r.ingredients||[]).join(' ')+' '+(r.steps||[]).join(' ')));};
-    const list=(window.recipes||[]).filter(r=>{
-      const hay=(r.name+' '+r.country+' '+r.region+' '+r.category+' '+(r.ingredients||[]).join(' ')).toLowerCase();
-      return (!q||hay.includes(q))&&(activeCountry==='All'||r.country===activeCountry)&&(activeContinent==='All'||continentOf(r)===activeContinent)&&(cat==='All'||r.category===cat)&&(quality==='All'||(quality==='Complete'?isComplete(r):!isComplete(r)));
-    });
-    const count=document.getElementById('recipeCount'); if(count)count.textContent=`${list.length.toLocaleString()} recipe${list.length===1?'':'s'} found`;
-    const status=document.getElementById('filterStatus'); if(status){const scope=activeCountry!=='All'?`${flag(activeCountry)} ${activeCountry}`:activeContinent!=='All'?activeContinent:'all cuisines';status.textContent=`Showing ${list.length.toLocaleString()} recipes from ${scope}`;}
-    const box=document.getElementById('recipes'); if(!box)return;
-    const visible=list.slice(0,24);
-    box.innerHTML=visible.length?visible.map(r=>{const i=window.recipes.indexOf(r);return `<article class="recipe"><div class="emoji">${r.emoji||'🍽️'}</div><h3>${r.name}</h3><div class="meta">${flag(r.country)} ${r.country||''} • ${r.category||''} • ⏱ ${r.time||30} min</div><div class="status-note">${isComplete(r)?'✅ Complete recipe':'📚 Catalogue recipe'}${r.region==='Baking & Pastry'?' • 🥐 Baking & Pastry':''}</div><div class="actions"><button class="btn" onclick="viewRecipe(${i})">View Recipe</button><button class="btn alt" onclick="toggleFav(${i})">${(window.favourites||[]).includes(r.name)?'♥':'♡'}</button></div></article>`}).join(''):'<div class="empty">No matching recipes found. Try another country, category, search term or recipe-detail filter.</div>';
-    if(list.length>24) box.insertAdjacentHTML('beforeend',`<div class="status-note" style="grid-column:1/-1;text-align:center">Showing the first 24 of ${list.length.toLocaleString()} matches. Use search, country or category filters to narrow the list.</div>`);
-  };
-  window.clearAllFilters=function(){const q=document.getElementById('search');if(q)q.value='';const c=document.getElementById('categoryFilter');if(c)c.value='All';const qf=document.getElementById('qualityFilter');if(qf)qf.value='All';selectedCountry='All';selectedContinent='All';window.selectedCountry='All';window.selectedContinent='All';populateCountries();updateExplorerUI();renderRecipes();};
-  window.openLibraryCoverage=function(){
-    const all=window.recipes||[], by={}; all.forEach(r=>{if(r.country&&r.country!=='International'){by[r.country]??={recipes:0,pastry:0};by[r.country].recipes++;if(r.region==='Baking & Pastry'||/pastry|bak/i.test(r.category||''))by[r.country].pastry++;}});
-    const rows=Object.entries(by).sort((a,b)=>a[0].localeCompare(b[0]));
-    show(`<h2>🌍 Global Library Coverage</h2><p>Every country in the selector is represented in the catalogue. Use a country to browse its recipes and baking products.</p><div class="status-note"><b>${rows.length}</b> country labels • <b>${all.length.toLocaleString()}</b> total catalogue entries</div><div style="max-height:55vh;overflow:auto">${rows.map(([c,v])=>`<div class="lesson"><b>${flag(c)} ${c}</b><br>${v.recipes} recipes • ${v.pastry} pastry/baking</div>`).join('')}</div>`);
-  };
-  // Add a visible coverage shortcut without disturbing the existing layout.
-  const grid=document.querySelector('.grid');
-  if(grid&&!document.getElementById('coverageTile')){const d=document.createElement('div');d.id='coverageTile';d.className='tile';d.onclick='openLibraryCoverage()';d.innerHTML='<div class="ico">🌍</div><b>Global Coverage</b><span>Countries, dishes & pastries</span>';grid.appendChild(d);}
-  populateCountries(); updateExplorerUI(); renderRecipes();
-})();
-</script>
-
-<script>
-(function(){
-  function completeAppCheck(){
-    const checks = [
-      ["Recipe catalogue", Array.isArray(window.recipes) && window.recipes.length > 0],
-      ["Country selector", !!document.getElementById("countryFilter")],
-      ["Category selector", !!document.getElementById("categoryFilter")],
-      ["Search", !!document.getElementById("search")],
-      ["Recipe display", !!document.getElementById("recipes")],
-      ["Modal", !!document.getElementById("modal")],
-      ["Local favourites", !!window.localStorage]
-    ];
-    const failed = checks.filter(x=>!x[1]);
-    window.GKRH_FINAL_CHECK = {
-      passed: failed.length === 0,
-      checks: Object.fromEntries(checks),
-      recipeCount: Array.isArray(window.recipes) ? window.recipes.length : 0
-    };
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded",completeAppCheck);
-  else completeAppCheck();
-})();
-</script>
-
-
-<script>
-(function(){
-  window.GKRH_RELEASE = "FINAL-APP";
-  window.addEventListener("error", function(e){
-    console.warn("Global Kitchen Recipes Hub:", e.message);
-  });
-  document.addEventListener("DOMContentLoaded", function(){
-    document.documentElement.setAttribute("data-gkrh-release","final-app");
-  });
-})();
-</script>
-
-</body>
-</html>

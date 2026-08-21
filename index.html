@@ -326,24 +326,33 @@ function updateCountryStats(){
 }
 
 function renderRecipes(){
- const q=(document.getElementById("search")?.value||"").toLowerCase().trim();
- const category=document.getElementById("categoryFilter")?.value||"All";
- const continentOf = r => r.country==="Korea" ? "Asia" : (Object.keys(cuisineCountries).find(c=>(cuisineCountries[c]||[]).includes(r.country)) || "International");
- const list=recipes.filter(r=>{
-   const hay=(r.name+" "+r.country+" "+r.region+" "+(r.category||"")+" "+r.ingredients.join(" ")).toLowerCase();
-   const matchesSearch=!q || hay.includes(q);
-   const matchesCategory=category==="All" || r.category===category;
-   const matchesContinent=selectedContinent==="All" || continentOf(r)===selectedContinent;
-   const matchesCountry=selectedCountry==="All" || r.country===selectedCountry || (selectedCountry==="South Korea" && r.country==="Korea");
-   return matchesSearch && matchesCategory && matchesContinent && matchesCountry;
- });
- updateRecipeCount(list.length); updateCountryStats(); document.getElementById("recipes").innerHTML=list.length?list.map((r,i)=>`
- <article class="recipe">${foodPhoto(r,`photo-${recipes.indexOf(r)}`)}<div class="emoji">${r.emoji}</div><h3>${r.name}</h3>
- <div class="meta">${r.country} • ${r.region} • ${r.category} • ⏱ ${r.time} min</div>
- <div class="actions"><button class="btn" onclick="viewRecipe(${recipes.indexOf(r)})">View Recipe</button>
- <button class="btn alt" onclick="toggleFav(${recipes.indexOf(r)})">${favourites.includes(r.name)?"♥":"♡"}</button></div></article>`).join(""):`<div class="empty">No matching recipes found. Try another ingredient or dish.</div>`;
- // Photos are loaded only after the user opens a recipe.
+  const q=(document.getElementById("search")?.value||"").toLowerCase().trim();
+  const category=document.getElementById("categoryFilter")?.value||"All";
+  const box=document.getElementById("recipes");
+  if(!box) return;
+  // Use a pre-built search index instead of joining ingredients for every recipe on every render.
+  const index=window._gkrhSearchIndex || (window._gkrhSearchIndex=recipes.map(r=>({r,text:(r.name+" "+r.country+" "+r.region+" "+(r.category||"")+" "+(r.ingredients||[]).join(" ")).toLowerCase()})));
+  const continentOf = r => r.country==="Korea" ? "Asia" : (Object.keys(cuisineCountries).find(c=>(cuisineCountries[c]||[]).includes(r.country)) || "International");
+  const list=[];
+  for(const item of index){
+    const r=item.r;
+    if(q && !item.text.includes(q)) continue;
+    if(category!=="All" && r.category!==category) continue;
+    if(selectedContinent!=="All" && continentOf(r)!==selectedContinent) continue;
+    if(selectedCountry!=="All" && !(r.country===selectedCountry || (selectedCountry==="South Korea" && r.country==="Korea"))) continue;
+    list.push(r);
+  }
+  updateRecipeCount(list.length);
+  updateCountryStats();
+  // Render only a small page of cards. No network request is made for list photos.
+  const page=list.slice(0,12);
+  box.innerHTML=page.length?page.map(r=>{
+    const i=recipes.indexOf(r);
+    return `<article class="recipe"><div class="food-photo" aria-hidden="true" style="height:120px;display:flex;align-items:center;justify-content:center;font-size:48px;background:#eef2ef;border-radius:15px;margin:-2px 0 12px">${r.emoji||"🍽️"}</div><h3>${r.name}</h3><div class="meta">${r.country} • ${r.region} • ${r.category} • ⏱ ${r.time} min</div><div class="actions"><button class="btn" onclick="viewRecipe(${i})">View Recipe</button><button class="btn alt" onclick="toggleFav(${i})">${favourites.includes(r.name)?"♥":"♡"}</button></div></article>`;
+  }).join(""):"<div class=\"empty\">No matching recipes found. Try another ingredient or dish.</div>";
+  if(list.length>12) box.insertAdjacentHTML("beforeend",`<div class="status-note" style="text-align:center">Showing 12 of ${list.length.toLocaleString()} matches. Use search or filters to narrow the list.</div>`);
 }
+
 function save(){localStorage.setItem("gkrh-fav",JSON.stringify(favourites));localStorage.setItem("gkrh-shop",JSON.stringify(shopping));}
 function show(html){const m=document.getElementById("modal");m.style.display="flex";m.style.pointerEvents="auto";m.style.visibility="visible";m.setAttribute("aria-hidden","false");document.getElementById("modalContent").innerHTML=html;m.classList.add("show");document.body.style.overflow="hidden";document.querySelector("#modal .close")?.focus()}
 function closeModal(){const m=document.getElementById("modal");m.classList.remove("show");m.style.display="none";m.style.pointerEvents="none";m.style.visibility="hidden";m.setAttribute("aria-hidden","true");document.body.style.overflow=""}
